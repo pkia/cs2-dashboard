@@ -8,10 +8,11 @@ kiosk. One of the dashboards reachable from the kiosk chooser
 
 ## What it shows
 
-- **Live tab** — the featured match with a big series score, which map is
-  on (`1 · Mirage` map strip), team world ranks, an embedded stream of
-  the game (muted autoplay, tap ⏹ to stop), and further live matches as
-  cards below
+- **Live tab** — the featured match as a stream-dominant card: the game
+  video (muted autoplay, tap ⏹ to stop, channel switcher) with the map
+  pills and veto line beneath it, and beside it the series score, the
+  near-live running round score (`11 – 10 · R22`), team world ranks and
+  an "Up next" panel with the following matches
 - **Upcoming tab** — the next week of pro play grouped by day, with
   per-match countdowns ("in 2h 15m")
 - **Results tab** — recently completed series with final scores, winners
@@ -67,24 +68,27 @@ autoplay policy; the toggle choice is remembered.
 
 Neither Liquipedia nor bo3.gg publishes the map veto or the running
 round score; HLTV has both but sits behind bot protection. The
-`cs2-hltv` feeder service (`scripts/hltv_detail.py`) renders the live
-match page with [camoufox](https://github.com/daijro/camoufox) (the
-stealth Firefox already on this host) every ~90 s while a match is
-live, extracts the veto sequence, per-map results with half scores and
-the live round score, and writes `hltv_detail.json`. It closes the
-browser when nothing is live. Pure parsing lives in `hltv.py` so it is
-covered by tests without a browser, and the web app never imports
-camoufox — if the feeder dies the dashboard just shows the other
-sources' data.
+`cs2-hltv` feeder service (`scripts/hltv_detail.py`) uses
+[camoufox](https://github.com/daijro/camoufox) (the stealth Firefox
+already on this host) to render the live match page and extract the
+veto sequence, per-map results with half scores and the live round
+score. For near-live scores it keeps that page open — the page itself
+maintains HLTV's scorebot websocket — and reads the numbers out of the
+live DOM every 8 s; full page renders happen only when the tracked
+match changes or every 5 minutes. The browser closes when nothing is
+live. Pure parsing lives in `hltv.py` so it is covered by tests
+without a browser, and the web app never imports camoufox — if the
+feeder dies the dashboard just shows the other sources' data.
 
 ## How it runs
 
 Same pattern as the other services on the host: Flask on port 8001
 (`cs2-dashboard.service`), pull-based CD via the deploy timer, CI on
-every push (ruff fatal rules, byte-compile, pytest). The UI targets the
-1024×600 kiosk touchscreen: big touch targets, auto-refresh every
-minute, optional tab auto-rotate, and a ⌂ Home button that returns to
-the kiosk chooser.
+every push (ruff fatal rules, byte-compile, pytest), plus the
+`cs2-hltv.service` feeder described above. The UI targets the
+1024×600 kiosk touchscreen: big touch targets, adaptive auto-refresh
+(12 s while a match is live), optional tab auto-rotate, and a ⌂ Home
+button that returns to the kiosk chooser.
 
 ## Local development
 
@@ -93,6 +97,6 @@ venv/bin/python app.py        # dashboard on :8001
 venv/bin/python -m pytest -v
 ```
 
-Tests run fully offline against a trimmed HTML fixture captured from a
-real ticker page (plus a synthetic live match, since none were running
-at capture time).
+Tests run fully offline against fixtures captured from real ticker and
+match pages (plus a synthetic live match, since none were running at
+capture time).
