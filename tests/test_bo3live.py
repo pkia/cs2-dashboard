@@ -1,6 +1,18 @@
 import time
 
+import pytest
+
 import bo3live
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _fresh_state(monkeypatch):
+    monkeypatch.setattr(bo3live, "_last_good_detail", {})
+    monkeypatch.setattr(bo3live, "_last_refresh", 0.0)
+    yield
+
 
 # Captured (lightly trimmed) shapes of bo3.gg's public API responses.
 LIVE_LIST = {
@@ -135,3 +147,39 @@ def test_state_serves_stale_when_fresh(monkeypatch):
     monkeypatch.setattr(bo3live, "refresh",
                         lambda limit=4: (_ for _ in ()).throw(AssertionError()))
     assert bo3live.state() is fresh
+
+
+def test_refresh_keeps_last_good_detail(monkeypatch):
+    """A transient detail failure must not clobber cached teams/streams."""
+    live = LIVE_LIST
+    detail_calls = {"n": 0}
+
+    def fake_get(url):
+        if "scope=show-match" in url:
+            detail_calls["n"] += 1
+            if detail_calls["n"] == 1:
+                return DETAIL
+            raise OSError("transient")
+        return live
+
+    monkeypatch.setattr(bo3live, "_get_json", fake_get)
+    monkeypatch.setattr(bo3live, "fetch_snapshot", lambda mid: None)
+    monkeypatch.setattr(bo3live, "_last_refresh", 0.0)
+    first = bo3live.refresh(force=True)
+    assert first["matches"][0]["teams"][0]["name"] == "Legacy"
+    assert len(first["matches"][0]["streams"]) == 2
+    second = bo3live.refresh(force=True)   # detail fetch now fails
+    m = second["matches"][0]
+    assert m["teams"][0]["name"] == "Legacy"      # kept
+    assert len(m["streams"]) == 2                  # kept
+    assert m["series"] == [1, 0]                   # fresh from v2
+
+
+def test_refresh_coalesces_bursts(monkeypatch):
+    calls = {"n": 0}
+    monkeypatch.setattr(bo3live, "fetch_live_list",
+                        lambda: (calls.__setitem__("n", calls["n"] + 1) or []))
+    monkeypatch.setattr(bo3live, "_last_refresh", time.time())
+    bo3live.refresh()          # within the gap -> no fetch
+    bo3live.refresh(force=True)
+    assert calls["n"] == 1

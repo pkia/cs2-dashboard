@@ -6,3 +6,5 @@ __pycache__/
 .deploy_failed
 cache.json
 static/logos/
+live_detail.json
+hltv_detail.json

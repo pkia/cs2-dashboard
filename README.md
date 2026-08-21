@@ -8,8 +8,10 @@ kiosk. One of the dashboards reachable from the kiosk chooser
 
 ## What it shows
 
-- **Live tab** — matches being played right now with the running series
-  score, a pulsing LIVE marker, format (Bo3/…) and stream channels
+- **Live tab** — the featured match with a big series score, which map is
+  on (`1 · Mirage` map strip), team world ranks, an embedded stream of
+  the game (muted autoplay, tap ⏹ to stop), and further live matches as
+  cards below
 - **Upcoming tab** — the next week of pro play grouped by day, with
   per-match countdowns ("in 2h 15m")
 - **Results tab** — recently completed series with final scores, winners
@@ -36,8 +38,44 @@ Rate-limit friendly by design, per their
   footer just flags how old the data is
 
 Team logos and tournament icons are fetched once through the
-`/api/logo` endpoint (allow-listed to `/commons/images/` on
-liquipedia.net) and cached on disk under `static/logos/`.
+`/api/logo` endpoint (allow-listed to Liquipedia's and bo3.gg's image
+hosts) and cached on disk under `static/logos/`.
+
+## Live in-match detail (bo3.gg)
+
+Liquipedia only publishes a series score between maps, so for what is
+happening *inside* a match — current map, round scores when available,
+official per-match streams, world ranks — `bo3live.py` talks to
+[bo3.gg](https://bo3.gg)'s public API and push socket:
+
+- `api.bo3.gg/api/v2/matches/live` — which matches are on, series
+  score, current map
+- `api.bo3.gg/api/v1/matches/<slug>?with=…` — teams, ranks, streams
+- `api.bo3.gg/api/v1/live/matches/<id>/last_snapshot` — round-level
+  snapshot, present whenever their coverage is producing one
+- `wss://updates.bo3.gg/ws` — push events used **only** as a
+  "something changed" trigger to re-poll REST, so event payload
+  changes can never break the dashboard
+
+bo3 detail is attached to Liquipedia matches by team name (with a
+single-live-match fallback). If any of it fails — API blocked, socket
+down, no coverage for a match — the dashboard simply shows what
+Liquipedia has. The embedded player runs muted per kiosk-browser
+autoplay policy; the toggle choice is remembered.
+
+## Map veto and live round scores (HLTV)
+
+Neither Liquipedia nor bo3.gg publishes the map veto or the running
+round score; HLTV has both but sits behind bot protection. The
+`cs2-hltv` feeder service (`scripts/hltv_detail.py`) renders the live
+match page with [camoufox](https://github.com/daijro/camoufox) (the
+stealth Firefox already on this host) every ~90 s while a match is
+live, extracts the veto sequence, per-map results with half scores and
+the live round score, and writes `hltv_detail.json`. It closes the
+browser when nothing is live. Pure parsing lives in `hltv.py` so it is
+covered by tests without a browser, and the web app never imports
+camoufox — if the feeder dies the dashboard just shows the other
+sources' data.
 
 ## How it runs
 

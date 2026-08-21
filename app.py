@@ -11,6 +11,7 @@ import threading
 import time
 
 import bo3live
+import hltv
 import liquipedia
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
@@ -37,6 +38,35 @@ def index():
 def api_matches():
     state = liquipedia.matches()
     live = bo3live.attach(state["live"], bo3live.state())
+
+    # HLTV layer (veto, map results, round score) comes from the
+    # cs2-hltv feeder service; attach when fresh and teams line up.
+    hs = hltv.read_state()
+    if hs["updated"] and time.time() - hs["updated"] < 30 * 60 and live:
+        hltv_names = {bo3live._norm(t) for t in hs.get("teams", [])}
+        hltv_names.discard("")
+        for m in live:
+            lp_names = {bo3live._norm(m["team1"]["name"]),
+                        bo3live._norm(m["team2"]["name"])}
+            lp_names.discard("")
+            if hltv_names & lp_names:
+                m["hltv"] = hs
+                # align the running round score to team1/team2 order using
+                # the scorebot's CT/T side team names
+                sb = hs.get("scorebot") or {}
+                pair = (sb or {}).get("round") or hs.get("round")
+                if pair:
+                    pair = list(pair)
+                    lp1 = bo3live._norm(m["team1"]["name"])
+                    if bo3live._norm(sb.get("t_team", "")) == lp1:
+                        pair = [pair[1], pair[0]]  # team1 plays the T side
+                    m["round"] = pair
+                    m["round_info"] = {
+                        "num": sb.get("round_num"),
+                        "map": sb.get("map"),
+                        "timer": sb.get("timer"),
+                    }
+                break
     return jsonify({
         "ok": state["fetched_at"] > 0,
         "fetched_at": state["fetched_at"],

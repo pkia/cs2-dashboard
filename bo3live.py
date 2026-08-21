@@ -33,9 +33,15 @@ WS_URL = "wss://updates.bo3.gg/ws"
 UA = ("Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 
+MIN_REFRESH_GAP = 25      # coalesce WS triggers: at most one refresh / 25s
+DETAIL_MATCHES = 2        # fetch full detail for at most the first N live
+DETAIL_STALE_KEEP = 1800  # keep last-good detail this long on failures
+
 _lock = threading.Lock()
 _state = {"updated": 0.0, "matches": []}
 _wakeup = threading.Event()
+_last_refresh = 0.0
+_last_good_detail = {}    # match id -> {"time": ts, detail dict fields}
 
 
 def _get_json(url):
@@ -159,23 +165,48 @@ def fetch_snapshot(match_id):
         return None
 
 
-def refresh(limit=4):
-    """Pull the full live picture and store it. Returns the new state."""
-    global _state
-    matches = fetch_live_list()[:limit]
+def refresh(force=False):
+    """Pull the full live picture and store it. Returns the new state.
+
+    Transient API failures must never degrade what the kiosk shows: if
+    a match's detail fetch fails or comes back empty, the last good
+    teams/streams are re-used (they change slowly) while scores and map
+    statuses still come fresh from the v2 list.
+    """
+    global _state, _last_refresh
+    now = time.time()
+    if not force and now - _last_refresh < MIN_REFRESH_GAP:
+        with _lock:
+            return _state
+    _last_refresh = now
+
+    matches = fetch_live_list()[:4]
     merged = []
     for m in matches:
         entry = dict(m)
-        try:
-            entry.update(fetch_match_detail(m["slug"]))
-        except Exception:
+        good = _last_good_detail.get(m["id"])
+        detail = None
+        if len(merged) < DETAIL_MATCHES or good is None:
+            try:
+                cand = fetch_match_detail(m["slug"])
+                if cand["teams"][0]["name"] or cand["streams"]:
+                    detail = cand
+            except Exception:
+                detail = None
+        if detail is not None:
+            _last_good_detail[m["id"]] = {"time": now, "detail": detail}
+        elif good and now - good["time"] < DETAIL_STALE_KEEP:
+            detail = good["detail"]
+        if detail is not None:
+            entry.update(detail)
+        else:
             entry.setdefault("teams", [{"name": "", "rank": None, "logo": ""},
                                        {"name": "", "rank": None, "logo": ""}])
             entry.setdefault("streams", [])
         # series score: prefer whichever source is ahead (they lag differently)
-        if entry.get("series") == [None, None]:
+        if entry.get("series") in (None, [None, None]):
             entry["series"] = m["series"]
-        if m["coverage"]:
+        if m["coverage"] and len(merged) < DETAIL_MATCHES:
             snap = fetch_snapshot(m["id"])
             if snap:
                 entry["snapshot"] = snap
@@ -304,10 +335,14 @@ def start_background():
 
     def refresher():
         while True:
-            _wakeup.wait(timeout=IDLE_TTL)
+            _wakeup.wait(timeout=REST_TTL)
             _wakeup.clear()
+            # coalesce event bursts: never fetch more often than the gap
+            gap = MIN_REFRESH_GAP - (time.time() - _last_refresh)
+            if gap > 0:
+                time.sleep(gap)
             try:
-                refresh()
+                refresh(force=True)
             except Exception:
                 pass
 
