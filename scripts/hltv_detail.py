@@ -57,11 +57,18 @@ class Browser:
         self._browser = self._cm.__enter__()
         return self._browser
 
-    def html(self, url):
+    def html(self, url, wait_sel=None, wait_ms=14000):
         page = self._ensure().new_page()
         try:
             page.goto(url, timeout=90000)
-            page.wait_for_timeout(4000)
+            if wait_sel:
+                try:
+                    # the live scorebot renders asynchronously; racing it
+                    # with a fixed sleep misses it on warm (cached) loads
+                    page.wait_for_selector(wait_sel, timeout=wait_ms)
+                except Exception:
+                    pass  # e.g. the break between maps - no scorebot
+            page.wait_for_timeout(1500)
             return page.content()
         finally:
             page.close()
@@ -76,6 +83,11 @@ class Browser:
         self._browser = None
 
 
+def _map_in_progress(live_match):
+    games = ((live_match.get("detail") or {}).get("games")) or []
+    return any(g.get("status") == "current" for g in games)
+
+
 def collect(browser, live):
     """Fetch veto/maps/round for the first live match HLTV also lists."""
     links_html = browser.html(HLTV + "/matches")
@@ -84,8 +96,14 @@ def collect(browser, live):
         link = hltv.match_live_link(m, links)
         if not link:
             continue
-        html = browser.html(HLTV + link["url"])
+        html = browser.html(HLTV + link["url"],
+                            wait_sel=".scorebot .scoreText" if _map_in_progress(m) else None)
         scorebot = hltv.parse_scorebot(html)
+        if scorebot is None and _map_in_progress(m):
+            prev = hltv.read_state()
+            if prev.get("round") and time.time() - prev["updated"] < 240 \
+                    and prev.get("url") == HLTV + link["url"]:
+                scorebot = prev.get("scorebot")  # keep last good mid-map
         state = {
             "updated": time.time(),
             "url": HLTV + link["url"],
