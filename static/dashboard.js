@@ -219,6 +219,12 @@ document.querySelectorAll(".tab").forEach((b) =>
         showTab(b.dataset.tab);
     }));
 
+// ?tab=live|upcoming|results deep link (used for testing and linking)
+{
+    const wanted = new URLSearchParams(location.search).get("tab");
+    if (wanted && document.getElementById("tab-" + wanted)) showTab(wanted);
+}
+
 $("maritime-btn").addEventListener("click", () => {
     location.href = location.protocol + "//" + location.hostname + ":8000/";
 });
