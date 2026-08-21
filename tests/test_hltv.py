@@ -72,7 +72,9 @@ def test_find_live_match_links_and_matching():
     assert hltv.match_live_link(lp2, links) is None
 
 
-def test_read_state_degrades():
+def test_read_state_degrades(tmp_path, monkeypatch):
+    # isolate from any real hltv_detail.json the feeder may have written
+    monkeypatch.setattr(hltv, "STATE_FILE", str(tmp_path / "missing.json"))
     state = hltv.read_state()
     assert state["maps"] == [] and state["round"] is None
 
