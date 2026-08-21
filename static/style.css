@@ -208,7 +208,7 @@ html, body {
     margin: 0 2px;
 }
 
-/* ---- featured live match (compact, fits 1024x600 with stream) ---- */
+/* ---- featured live match: stream-dominant layout ---- */
 .featured {
     background: var(--panel);
     border: 2px solid var(--live);
@@ -216,61 +216,64 @@ html, body {
     margin-bottom: 10px;
     overflow: hidden;
 }
-.featured .match-top { padding: 8px 14px 2px; }
-.live-pill.big { font-size: 15px; }
+.feat-grid {
+    display: flex;
+    gap: 10px;
+    padding: 8px 12px 12px;
+    align-items: stretch;
+}
+.feat-left {
+    flex: 1 1 62%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+.feat-right {
+    flex: 1 1 38%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.feat-right .match-top { padding: 0; }
+.live-pill.big { font-size: 14px; }
+.feat-right .tournament-name {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .feat-row {
     display: flex;
     align-items: center;
-    padding: 4px 14px 2px;
+    padding: 2px 0;
 }
 .feat-team {
     flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
+    gap: 1px;
     min-width: 0;
     text-align: center;
 }
-.feat-team .team-short { font-size: 24px; }
-.feat-team .team-full { font-size: 12px; }
-.team-logo.med { width: 52px; height: 52px; flex: 0 0 52px; }
+.feat-team .team-short { font-size: 19px; }
+.feat-team .team-full { font-size: 11px; }
+.team-logo.med { width: 40px; height: 40px; flex: 0 0 40px; padding: 4px; }
 .score-cell.big {
-    flex: 0 0 160px;
+    flex: 0 0 92px;
     background: transparent;
     border: none;
-    padding: 6px 0;
+    padding: 4px 0;
 }
-.score-cell.big .score { font-size: 42px; }
-.score-cell.big .sep { padding: 0 6px; }
+.score-cell.big .score { font-size: 30px; }
+.score-cell.big .sep { padding: 0 4px; }
 .round-score {
-    font-size: 16px;
+    font-size: 14px;
     color: var(--accent);
     font-weight: 800;
-    letter-spacing: 0.03em;
-    min-height: 20px;
-}
-
-/* bottom split: map/veto info left, stream right (stream gets the
- * larger share; the veto is a single compact line) */
-.feat-bottom {
-    display: flex;
-    gap: 12px;
-    padding: 4px 14px 10px;
-    align-items: flex-start;
-}
-.feat-info {
-    flex: 1 1 44%;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-.feat-stream {
-    flex: 1 1 56%;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
+    letter-spacing: 0.02em;
+    min-height: 18px;
 }
 
 /* map results list */
@@ -278,71 +281,46 @@ html, body {
 .map-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 14px;
+    gap: 6px;
+    font-size: 13px;
     color: var(--muted);
-    padding: 3px 8px;
+    padding: 2px 8px;
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--panel-2);
 }
-.map-row .map-name { font-weight: 700; color: var(--text); min-width: 72px; }
-.map-row .map-score { font-weight: 800; min-width: 46px; }
+.map-row .map-name { font-weight: 700; color: var(--text); min-width: 60px; }
+.map-row .map-score { font-weight: 800; min-width: 40px; }
 .map-row.t1 .map-score { color: var(--win); }
 .map-row.t2 .map-score { color: var(--live); }
 .map-row.live { border-color: var(--live); }
 .map-row.live .map-score { color: var(--live); }
-.map-row .map-note { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-row .map-note { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-row .halves { color: var(--muted); }
 
 /* veto: one compact line */
 .veto-compact {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding: 2px 8px;
+    padding: 1px 8px;
 }
-.veto-compact .dotsep { padding: 0 4px; opacity: 0.6; }
+.veto-compact .dotsep { padding: 0 3px; opacity: 0.6; }
 
-.map-strip {
-    display: flex;
-    gap: 8px;
-    padding: 4px 16px 10px;
-    flex-wrap: wrap;
-}
-.map-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 12px;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    background: var(--panel-2);
-    font-size: 14px;
-    color: var(--muted);
-}
-.map-pill.current {
-    border-color: var(--live);
-    color: var(--text);
-    font-weight: 700;
-}
-.map-pill.done { color: var(--text); }
-
-/* ---- stream player ---- */
-.stream-box { padding: 0 16px 8px; }
+/* stream player - fills the left column */
 .stream-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 14px;
+    font-size: 13px;
     color: var(--muted);
-    padding: 4px 2px;
+    padding: 2px 2px;
 }
 .stream-toggle {
-    padding: 4px 14px;
-    font-size: 14px;
+    padding: 3px 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--text);
     background: var(--panel-2);
@@ -353,13 +331,13 @@ html, body {
 .stream-toggle:active { background: var(--accent); color: #111; }
 .stream-chips {
     display: flex;
-    gap: 6px;
+    gap: 5px;
     flex-wrap: wrap;
-    padding: 4px 0 8px;
+    padding: 3px 0 6px;
 }
 .stream-chip-live {
-    padding: 3px 10px;
-    font-size: 13px;
+    padding: 2px 8px;
+    font-size: 12px;
     color: var(--muted);
     background: var(--panel-2);
     border: 1px solid var(--border);
@@ -371,12 +349,11 @@ html, body {
     border-color: var(--accent);
     font-weight: 700;
 }
-.stream-frame {
-    height: 272px;
-    width: auto;
-    max-width: 100%;
-    aspect-ratio: 16 / 9;
-    margin: 0 auto;
+.feat-left .stream-frame {
+    flex: 1;
+    width: 100%;
+    min-height: 300px;
+    max-height: 372px;
     border-radius: 10px;
     border: 1px solid var(--border);
     background: #000;
