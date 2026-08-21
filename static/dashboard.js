@@ -114,12 +114,12 @@ function streamEmbed(m) {
              sandbox="allow-scripts allow-same-origin allow-presentation"
              referrerpolicy="no-referrer"></iframe>`
         : "";
-    return `<div class="feat-stream">
+    return `
         <div class="stream-bar">
             <span class="stream-meta">📺 ${esc(s.name || "stream")}</span>
             <button class="stream-toggle">${streamOn ? "⏹ stop" : "▶ watch"}</button>
         </div>
-        <div class="stream-chips">${chips}</div>${body}</div>`;
+        <div class="stream-chips">${chips}</div>${body}`;
 }
 
 /* merge bo3 map statuses with HLTV per-map results */
@@ -147,13 +147,15 @@ function mapRows(m) {
 }
 
 function vetoList(m) {
+    /* one compact line: 🚫 Anubis · 🚫 Cache · ✅ Mirage · ✅ Dust2 · ⚖️ Ancient
+     * (who picked what stays on the map rows above) */
     const veto = (m.hltv && m.hltv.veto) || [];
     if (!veto.length) return "";
-    return `<div class="veto-list">` + veto.map((v) => {
+    const parts = veto.map((v) => {
         const icon = v.kind === "pick" ? "✅" : v.kind === "remove" ? "🚫" : "⚖️";
-        const line = v.line.replace(/^\d+\.\s*/, "");
-        return `<div class="veto-line ${v.kind}">${icon} ${esc(line)}</div>`;
-    }).join("") + `</div>`;
+        return `${icon} ${esc(v.map || v.line.replace(/^\d+\.\s*/, ""))}`;
+    });
+    return `<div class="veto-compact">${parts.join('<span class="dotsep">·</span>')}</div>`;
 }
 
 function mapList(m) {
@@ -180,30 +182,35 @@ function featuredLive(m) {
         : `<div class="score vs">vs</div>`;
     const bo = m.bestof || (d.bestof ? "Bo" + d.bestof : "");
     return `<div class="featured">
-        <div class="match-top">
-            <span class="live-pill big"><span class="live-dot"></span>LIVE</span>
-            <span class="tournament-name">${esc((m.tournament || {}).name || "")}</span>
-            <span class="top-right">${esc(bo)}</span>
-        </div>
-        <div class="feat-row">
-            <div class="feat-team">
-                <span class="team-logo med">${logoImg(t1.logo || b1.logo)}</span>
-                <div class="team-short">${esc(t1.name || b1.name || "TBD")}</div>
-                <div class="team-full">${rankChip(b1.rank)}</div>
+        <div class="feat-grid">
+            <div class="feat-left">
+                ${streamEmbed(m)}
             </div>
-            <div class="score-cell big">
-                ${score}
-                <div class="round-score" data-round>round –</div>
+            <div class="feat-right">
+                <div class="match-top">
+                    <span class="live-pill big"><span class="live-dot"></span>LIVE</span>
+                    <span class="top-right">${esc(bo)}</span>
+                </div>
+                <div class="tournament-name">${esc((m.tournament || {}).name || "")}</div>
+                <div class="feat-row">
+                    <div class="feat-team">
+                        <span class="team-logo med">${logoImg(t1.logo || b1.logo)}</span>
+                        <div class="team-short">${esc(t1.name || b1.name || "TBD")}</div>
+                        <div class="team-full">${rankChip(b1.rank)}</div>
+                    </div>
+                    <div class="score-cell big">
+                        ${score}
+                        <div class="round-score" data-round>between maps</div>
+                    </div>
+                    <div class="feat-team">
+                        <span class="team-logo med">${logoImg(t2.logo || b2.logo)}</span>
+                        <div class="team-short">${esc(t2.name || b2.name || "TBD")}</div>
+                        <div class="team-full">${rankChip(b2.rank)}</div>
+                    </div>
+                </div>
+                ${mapList(m)}
+                ${vetoList(m)}
             </div>
-            <div class="feat-team right">
-                <span class="team-logo med">${logoImg(t2.logo || b2.logo)}</span>
-                <div class="team-short">${esc(t2.name || b2.name || "TBD")}</div>
-                <div class="team-full">${rankChip(b2.rank)}</div>
-            </div>
-        </div>
-        <div class="feat-bottom">
-            <div class="feat-info">${mapList(m)}${vetoList(m)}</div>
-            ${streamEmbed(m)}
         </div>
     </div>`;
 }
@@ -219,7 +226,6 @@ function patchLiveValues(m) {
         if (round) {
             txt = `${round[0]} – ${round[1]}`;
             if (info.num) txt += ` · R${info.num}`;
-            if (info.timer) txt += ` · ${info.timer}`;
         }
         el.textContent = txt;
     }
@@ -513,10 +519,11 @@ document.addEventListener("touchstart", () => { lastInteraction = Date.now(); },
 
 load();
 clock();
-// adaptive poll: 30s while matches are live, 60s otherwise
+// adaptive poll: 12s while matches are live (round scores refresh
+// server-side every ~8s), 60s otherwise
 (function pollLoop() {
     load();
-    setTimeout(pollLoop, state.live.length ? 30000 : REFRESH_MS);
+    setTimeout(pollLoop, state.live.length ? 12000 : REFRESH_MS);
 })();
 setInterval(tickCountdowns, TICK_MS);
 setInterval(clock, 1000);
