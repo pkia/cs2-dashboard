@@ -51,6 +51,21 @@ def api_matches():
             lp_names.discard("")
             if hltv_names & lp_names:
                 m["hltv"] = hs
+                # align the running round score to team1/team2 order using
+                # the scorebot's CT/T side team names
+                sb = hs.get("scorebot") or {}
+                pair = (sb or {}).get("round") or hs.get("round")
+                if pair:
+                    pair = list(pair)
+                    lp1 = bo3live._norm(m["team1"]["name"])
+                    if bo3live._norm(sb.get("t_team", "")) == lp1:
+                        pair = [pair[1], pair[0]]  # team1 plays the T side
+                    m["round"] = pair
+                    m["round_info"] = {
+                        "num": sb.get("round_num"),
+                        "map": sb.get("map"),
+                        "timer": sb.get("timer"),
+                    }
                 break
     return jsonify({
         "ok": state["fetched_at"] > 0,

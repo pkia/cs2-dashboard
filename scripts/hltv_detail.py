@@ -85,13 +85,15 @@ def collect(browser, live):
         if not link:
             continue
         html = browser.html(HLTV + link["url"])
+        scorebot = hltv.parse_scorebot(html)
         state = {
             "updated": time.time(),
             "url": HLTV + link["url"],
             "teams": link["teams"],
             "veto": hltv.parse_veto(html),
             "maps": hltv.parse_maps(html),
-            "round": hltv.parse_round_score(html),
+            "scorebot": scorebot,
+            "round": scorebot["round"] if scorebot else None,
         }
         return state
     return None

@@ -49,12 +49,8 @@ def test_parse_maps_ignores_name_only_preview_holders():
     assert [m["map"] for m in maps] == ["Dust2"]
 
 
-def test_parse_round_score_shapes():
-    assert hltv.parse_round_score(
-        '<div class="match-header-vs-score ">'
-        '<span class="match-header-vs-score-first">7</span>:'
-        '<span class="match-header-vs-score-second">5</span></div>') == [7, 5]
-    assert hltv.parse_round_score('{"currentScore": "12-9"}') == [12, 9]
+def test_parse_round_score_delegates_to_scorebot():
+    assert hltv.parse_round_score(SCOREBOT_HTML) == [1, 2]
     assert hltv.parse_round_score("<html>no score here</html>") is None
 
 
@@ -87,3 +83,35 @@ def test_read_state_roundtrip(tmp_path, monkeypatch):
             "round": [7, 5], "teams": ["Legacy", "Falcons"]}
     f.write_text(json.dumps(data))
     assert hltv.read_state()["round"] == [7, 5]
+
+
+SCOREBOT_HTML = '''
+<div class="scorebot"><div class="scoreboard">
+<div class="score scoreText"><div class="ctScore">1</div>
+<div class="scoreSeparater">:</div><div class="tScore">2</div></div>
+<span class="roundText">R: <span class="currentRoundText">
+<!-- react-text: 294 -->4<!-- /react-text -->
+<!-- react-text: 15 --> - <!-- /react-text -->
+<!-- react-text: 16 -->Dust2<!-- /react-text -->
+</span></span>
+<div class="timeText"><span>1:47</span></div>
+<table class="team"><thead class="ctTeamHeaderBg"><tr><td>
+<div class="teamName"><img src="x.png" alt=""> Legacy</div></td></tr></thead></table>
+<table class="team"><thead class="tTeamHeaderBg"><tr><td>
+<div class="teamName"><img src="y.png" alt=""> Falcons</div></td></tr></thead></table>
+</div></div>
+'''
+
+
+def test_parse_scorebot_full():
+    sb = hltv.parse_scorebot(SCOREBOT_HTML)
+    assert sb["round"] == [1, 2]
+    assert sb["ct_team"] == "Legacy"
+    assert sb["t_team"] == "Falcons"
+    assert sb["round_num"] == 4
+    assert sb["map"] == "Dust2"
+    assert sb["timer"] == "1:47"
+
+
+def test_parse_scorebot_absent_when_no_map():
+    assert hltv.parse_scorebot("<html>break time</html>") is None

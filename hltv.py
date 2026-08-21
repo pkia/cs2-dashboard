@@ -82,19 +82,59 @@ def parse_maps(html):
     return maps
 
 
-def parse_round_score(html):
-    """Live round score from the header, present only while a map is on.
+def _strip_tags(fragment):
+    txt = re.sub(r"<!--.*?-->", "", fragment, flags=re.S)
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", txt)).strip()
 
-    The exact markup differs between matches, so look at the two
-    best-known shapes and fall back to nothing.
+
+def parse_scorebot(html):
+    """The live scorebot widget: running round score, round number, map,
+    round timer, and which team is on which side. None when no map is on.
+
+    Markup (2026 HLTV match page):
+      <div class="score scoreText"><div class="ctScore">1</div>...
+      <span class="currentRoundText">R: 4 - Dust2</span>
+      <div class="timeText"><span>1:47</span></div>
     """
-    m = re.search(r'class="match-header-vs-score[ a-z-]*">\s*'
-                  r'<span[^>]*>(\d+)</span>\s*:\s*<span[^>]*>(\d+)</span>', html)
-    if not m:
-        m = re.search(r'"currentScore"\s*:\s*"\s*(\d+)\s*[-:]\s*(\d+)\s*"', html)
-    if not m:
+    if "scoreText" not in html:
         return None
-    return [int(m.group(1)), int(m.group(2))]
+    ct = re.search(r'class="ctScore">\s*(\d+)\s*<', html)
+    t = re.search(r'class="tScore">\s*(\d+)\s*<', html)
+    if not (ct and t):
+        return None
+    out = {
+        "round": [int(ct.group(1)), int(t.group(1))],   # [CT side, T side]
+        "ct_team": "", "t_team": "",
+        "round_num": None, "map": "", "timer": "",
+    }
+    rt = re.search(r'class="currentRoundText">(.*?)</span>', html, re.S)
+    if rt:
+        m2 = re.search(r"^\s*(\d+)\s*-\s*(.+)$", _strip_tags(rt.group(1)))
+        if m2:
+            out["round_num"] = int(m2.group(1))
+            out["map"] = m2.group(2).strip()
+    timer = re.search(r'class="timeText">\s*<span>\s*([\d:]+)\s*</span>', html)
+    if timer:
+        out["timer"] = timer.group(1)
+    # the two team tables: the CT one carries ctTeamHeaderBg in its thead
+    for tbl in re.findall(r'<table class="team">.*?</table>', html, re.S):
+        nm = re.search(r'<div class="teamName">(.*?)</div>', tbl, re.S)
+        if not nm:
+            continue
+        name = _strip_tags(nm.group(1))
+        if not name:
+            continue
+        if "ctTeamHeaderBg" in tbl:
+            out["ct_team"] = name
+        else:
+            out["t_team"] = name
+    return out
+
+
+def parse_round_score(html):
+    """Compatibility shim: just the running score, team-ordered later."""
+    sb = parse_scorebot(html)
+    return sb["round"] if sb else None
 
 
 def find_live_match_links(matches_html):

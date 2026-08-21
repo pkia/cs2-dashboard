@@ -64,29 +64,46 @@ function rankChip(rank) {
 }
 
 let streamOn = localStorage.getItem("stream-on") !== "off";
-let streamPick = null;   // name of the manually chosen stream, if any
+let streamPick = localStorage.getItem("stream-pick") || null;
 let featuredSigPrev = null;
 
-function currentStream(d) {
-    const streams = (d && d.streams) || [];
+function currentStream(m) {
+    const streams = ((m.detail || {}).streams || []).filter((s) => s.embed);
+    if (!streams.length) return null;
     return streams.find((x) => x.name === streamPick)
         || streams.find((x) => x.lang === "en")
         || streams[0];
 }
 
+function lpStreamFallback(m) {
+    /* bo3's stream list can be flaky - Liquipedia's match streams work
+     * as a fallback source for the embed. */
+    return (m.streams || []).map((u) => {
+        const tw = u.match(/twitch\.tv\/(.+)$/);
+        if (tw) return {name: tw[1], embed: `https://player.twitch.tv/?channel=${tw[1]}`,
+                        url: u, viewers: null, lang: "", provider: "twitch"};
+        const yt = u.match(/[?&]v=([\w-]{6,})/);
+        if (yt) return {name: "YouTube", embed: `https://www.youtube.com/embed/${yt[1]}`,
+                        url: u, viewers: null, lang: "", provider: "youtube"};
+        return null;
+    }).filter(Boolean);
+}
+
 function streamEmbed(m) {
-    const d = m.detail;
-    if (!d || !d.streams || !d.streams.length) return "";
-    const s = currentStream(d);
-    let src = s.embed || "";
-    if (!src) return "";
+    let streams = ((m.detail || {}).streams || []).filter((s) => s.embed);
+    if (!streams.length) streams = lpStreamFallback(m);
+    if (!streams.length) return "";
+    const s = streams.find((x) => x.name === streamPick)
+        || streams.find((x) => x.lang === "en")
+        || streams[0];
+    let src = s.embed;
     if (src.includes("twitch")) {
         src += (src.includes("?") ? "&" : "?") +
             `muted=true&autoplay=true&parent=${location.hostname}`;
     } else if (src.includes("youtube")) {
         src += (src.includes("?") ? "&" : "?") + "autoplay=1&mute=1";
     }
-    const chips = d.streams.map((x) => {
+    const chips = streams.map((x) => {
         const sel = x.name === s.name ? " sel" : "";
         const v = x.viewers ? ` · ${x.viewers.toLocaleString()}` : "";
         return `<button class="stream-chip-live${sel}" data-stream="${esc(x.name)}">` +
@@ -194,28 +211,44 @@ function featuredLive(m) {
 /* values that change every few seconds WITHOUT justifying a rebuild of
  * the featured card (which would restart the stream iframe) */
 function patchLiveValues(m) {
-    const d = m.detail || {};
-    const rs = roundScore(d) || (m.hltv && m.hltv.round);
+    const round = m.round || roundScore(m.detail);
+    const info = m.round_info || {};
     const el = document.querySelector("[data-round]");
-    if (el) el.textContent = rs ? `round ${rs[0]}–${rs[1]}` : "round –";
-    const s = currentStream(d);
+    if (el) {
+        let txt = "between maps";
+        if (round) {
+            txt = `${round[0]} – ${round[1]}`;
+            if (info.num) txt += ` · R${info.num}`;
+            if (info.timer) txt += ` · ${info.timer}`;
+        }
+        el.textContent = txt;
+    }
+    const s = currentStream(m) ||
+        lpStreamFallback(m)[0];
     const meta = document.querySelector(".stream-meta");
     if (meta && s) {
         meta.textContent = `📺 ${s.name}` +
             (s.viewers ? ` · ${s.viewers.toLocaleString()} watching` : "");
+    }
+    // running score into the live map row, patched in place
+    const liveRow = document.querySelector(".map-row.live .map-score");
+    if (liveRow) {
+        liveRow.textContent = round ? `${round[0]}–${round[1]}` : "on now";
     }
 }
 
 function featuredSig(m) {
     if (!m) return "none";
     const d = m.detail || {};
+    const streams = (d.streams || []).map((x) => x.name).sort();
+    if (!streams.length && (m.streams || []).length) streams.push("lp");
     return JSON.stringify([
         m.team1 && m.team1.name, m.team2 && m.team2.name,
         d.series, d.slug,
         (d.games || []).map((g) => [g.number, g.status, g.map]).join(),
         (m.hltv && m.hltv.maps || []).map((h) => [h.map, h.left.score, h.right.score]).join(),
         streamOn, streamPick,
-        (d.streams || []).map((x) => x.name).join(),
+        streams.join(),
     ]);
 }
 
@@ -417,6 +450,7 @@ function bindStreamControls() {
         chip.dataset.bound = "1";
         chip.addEventListener("click", () => {
             streamPick = chip.dataset.stream;
+            localStorage.setItem("stream-pick", streamPick);
             render();
         });
     });
