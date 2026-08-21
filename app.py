@@ -11,6 +11,7 @@ import threading
 import time
 
 import bo3live
+import hltv
 import liquipedia
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
@@ -37,6 +38,20 @@ def index():
 def api_matches():
     state = liquipedia.matches()
     live = bo3live.attach(state["live"], bo3live.state())
+
+    # HLTV layer (veto, map results, round score) comes from the
+    # cs2-hltv feeder service; attach when fresh and teams line up.
+    hs = hltv.read_state()
+    if hs["updated"] and time.time() - hs["updated"] < 30 * 60 and live:
+        hltv_names = {bo3live._norm(t) for t in hs.get("teams", [])}
+        hltv_names.discard("")
+        for m in live:
+            lp_names = {bo3live._norm(m["team1"]["name"]),
+                        bo3live._norm(m["team2"]["name"])}
+            lp_names.discard("")
+            if hltv_names & lp_names:
+                m["hltv"] = hs
+                break
     return jsonify({
         "ok": state["fetched_at"] > 0,
         "fetched_at": state["fetched_at"],

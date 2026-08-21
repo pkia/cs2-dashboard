@@ -1,0 +1,17 @@
+[Unit]
+Description=CS2 Dashboard HLTV detail feeder (camoufox)
+After=network-online.target cs2-dashboard.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ev
+WorkingDirectory=/home/ev/cs2-dashboard
+ExecStart=/home/ev/.venvs/camoufox/bin/python scripts/hltv_detail.py
+Restart=always
+RestartSec=30
+# camoufox needs a virtual display; give the service room for it
+Environment=HOME=/home/ev
+
+[Install]
+WantedBy=multi-user.target

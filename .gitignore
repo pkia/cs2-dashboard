@@ -7,3 +7,4 @@ __pycache__/
 cache.json
 static/logos/
 live_detail.json
+hltv_detail.json

@@ -64,15 +64,20 @@ function rankChip(rank) {
 }
 
 let streamOn = localStorage.getItem("stream-on") !== "off";
-let streamPick = null;  // name of the manually chosen stream, if any
+let streamPick = null;   // name of the manually chosen stream, if any
+let featuredSigPrev = null;
+
+function currentStream(d) {
+    const streams = (d && d.streams) || [];
+    return streams.find((x) => x.name === streamPick)
+        || streams.find((x) => x.lang === "en")
+        || streams[0];
+}
 
 function streamEmbed(m) {
     const d = m.detail;
     if (!d || !d.streams || !d.streams.length) return "";
-    const streams = d.streams;
-    let s = streams.find((x) => x.name === streamPick)
-        || streams.find((x) => x.lang === "en")
-        || streams[0];
+    const s = currentStream(d);
     let src = s.embed || "";
     if (!src) return "";
     if (src.includes("twitch")) {
@@ -81,8 +86,7 @@ function streamEmbed(m) {
     } else if (src.includes("youtube")) {
         src += (src.includes("?") ? "&" : "?") + "autoplay=1&mute=1";
     }
-    const viewers = (n) => n ? `${n.toLocaleString()} watching` : "";
-    const chips = streams.map((x) => {
+    const chips = d.streams.map((x) => {
         const sel = x.name === s.name ? " sel" : "";
         const v = x.viewers ? ` · ${x.viewers.toLocaleString()}` : "";
         return `<button class="stream-chip-live${sel}" data-stream="${esc(x.name)}">` +
@@ -91,14 +95,61 @@ function streamEmbed(m) {
     const body = streamOn
         ? `<iframe class="stream-frame" src="${esc(src)}" allowfullscreen
              sandbox="allow-scripts allow-same-origin allow-presentation"
-             referrerpolicy="no-referrer" loading="lazy"></iframe>`
+             referrerpolicy="no-referrer"></iframe>`
         : "";
-    return `<div class="stream-box">
+    return `<div class="feat-stream">
         <div class="stream-bar">
-            <span>📺 ${esc(s.name || "stream")} ${esc(viewers(s.viewers) ? "· " + viewers(s.viewers) : "")}</span>
+            <span class="stream-meta">📺 ${esc(s.name || "stream")}</span>
             <button class="stream-toggle">${streamOn ? "⏹ stop" : "▶ watch"}</button>
         </div>
         <div class="stream-chips">${chips}</div>${body}</div>`;
+}
+
+/* merge bo3 map statuses with HLTV per-map results */
+function mapRows(m) {
+    const d = m.detail || {};
+    const games = d.games || [];
+    const hmaps = (m.hltv && m.hltv.maps) || [];
+    const rows = [];
+    for (let i = 0; i < Math.max(games.length, hmaps.length); i++) {
+        const g = games[i] || {};
+        const h = hmaps[i] || {};
+        const name = h.map || g.map || `Map ${g.number || i + 1}`;
+        let middle = "", cls = "upcoming";
+        if (h.finished && h.left.score != null) {
+            middle = `${h.left.score}–${h.right.score}`;
+            cls = h.left.won ? "t1" : "t2";
+        } else if (g.status === "current") {
+            middle = "on now";
+            cls = "live";
+        }
+        const pick = h.left.pick ? m.team1.name : h.right.pick ? m.team2.name : "";
+        rows.push({name, middle, cls, pick, halves: h.halves || ""});
+    }
+    return rows;
+}
+
+function vetoList(m) {
+    const veto = (m.hltv && m.hltv.veto) || [];
+    if (!veto.length) return "";
+    return `<div class="veto-list">` + veto.map((v) => {
+        const icon = v.kind === "pick" ? "✅" : v.kind === "remove" ? "🚫" : "⚖️";
+        const line = v.line.replace(/^\d+\.\s*/, "");
+        return `<div class="veto-line ${v.kind}">${icon} ${esc(line)}</div>`;
+    }).join("") + `</div>`;
+}
+
+function mapList(m) {
+    const rows = mapRows(m);
+    if (!rows.length) return "";
+    return `<div class="map-list">` + rows.map((r) => {
+        const live = r.cls === "live" ? `<span class="live-dot"></span>` : "";
+        const pick = r.pick ? ` · ${esc(r.pick)} pick` : "";
+        const halves = r.halves ? ` <span class="halves">(${esc(r.halves)})</span>` : "";
+        return `<div class="map-row ${r.cls}">${live}<span class="map-name">${esc(r.name)}</span>` +
+            `<span class="map-score">${esc(r.middle)}</span>` +
+            `<span class="map-note">${pick}${halves}</span></div>`;
+    }).join("") + `</div>`;
 }
 
 function featuredLive(m) {
@@ -107,12 +158,9 @@ function featuredLive(m) {
     const b1 = (d.teams && d.teams[0]) || {}, b2 = (d.teams && d.teams[1]) || {};
     const series = (d.series && Number.isInteger(d.series[0])) ? d.series
         : [m.score1, m.score2];
-    const rs = roundScore(d);
     const score = Number.isInteger(series[0])
         ? `<div class="score">${series[0]}<span class="sep">:</span>${series[1]}</div>`
         : `<div class="score vs">vs</div>`;
-    const roundLine = rs
-        ? `<div class="round-score">round ${rs[0]} – ${rs[1]}</div>` : "";
     const bo = m.bestof || (d.bestof ? "Bo" + d.bestof : "");
     return `<div class="featured">
         <div class="match-top">
@@ -122,20 +170,53 @@ function featuredLive(m) {
         </div>
         <div class="feat-row">
             <div class="feat-team">
-                <span class="team-logo big">${logoImg(t1.logo || b1.logo)}</span>
+                <span class="team-logo med">${logoImg(t1.logo || b1.logo)}</span>
                 <div class="team-short">${esc(t1.name || b1.name || "TBD")}</div>
-                <div class="team-full">${esc(b1.full || "")} ${rankChip(b1.rank)}</div>
+                <div class="team-full">${rankChip(b1.rank)}</div>
             </div>
-            <div class="score-cell big">${score}${roundLine}</div>
+            <div class="score-cell big">
+                ${score}
+                <div class="round-score" data-round>round –</div>
+            </div>
             <div class="feat-team right">
-                <span class="team-logo big">${logoImg(t2.logo || b2.logo)}</span>
+                <span class="team-logo med">${logoImg(t2.logo || b2.logo)}</span>
                 <div class="team-short">${esc(t2.name || b2.name || "TBD")}</div>
-                <div class="team-full">${rankChip(b2.rank)} ${esc(b2.full || "")}</div>
+                <div class="team-full">${rankChip(b2.rank)}</div>
             </div>
         </div>
-        ${mapStrip(d)}
-        ${streamEmbed(m)}
+        <div class="feat-bottom">
+            <div class="feat-info">${mapList(m)}${vetoList(m)}</div>
+            ${streamEmbed(m)}
+        </div>
     </div>`;
+}
+
+/* values that change every few seconds WITHOUT justifying a rebuild of
+ * the featured card (which would restart the stream iframe) */
+function patchLiveValues(m) {
+    const d = m.detail || {};
+    const rs = roundScore(d) || (m.hltv && m.hltv.round);
+    const el = document.querySelector("[data-round]");
+    if (el) el.textContent = rs ? `round ${rs[0]}–${rs[1]}` : "round –";
+    const s = currentStream(d);
+    const meta = document.querySelector(".stream-meta");
+    if (meta && s) {
+        meta.textContent = `📺 ${s.name}` +
+            (s.viewers ? ` · ${s.viewers.toLocaleString()} watching` : "");
+    }
+}
+
+function featuredSig(m) {
+    if (!m) return "none";
+    const d = m.detail || {};
+    return JSON.stringify([
+        m.team1 && m.team1.name, m.team2 && m.team2.name,
+        d.series, d.slug,
+        (d.games || []).map((g) => [g.number, g.status, g.map]).join(),
+        (m.hltv && m.hltv.maps || []).map((h) => [h.map, h.left.score, h.right.score]).join(),
+        streamOn, streamPick,
+        (d.streams || []).map((x) => x.name).join(),
+    ]);
 }
 
 function countdown(ts, now) {
@@ -238,13 +319,21 @@ function matchCard(m, now, opts = {}) {
 function render() {
     const now = Date.now();
 
-    // live: featured match (prefer one with bo3 detail) + the rest as cards
+    // live: featured match (prefer one with detail) + the rest as cards.
+    // Rebuild the featured card only when its structure changes - a
+    // rebuild restarts the stream iframe, so round scores and viewer
+    // counts are patched in place instead.
     const withDetail = state.live.filter((m) => m.detail);
     const featured = withDetail.length ? withDetail[0] : state.live[0];
     const rest = state.live.filter((m) => m !== featured);
-    $("featured-live").innerHTML = featured ? featuredLive(featured) : "";
+    const sig = featuredSig(featured);
+    if (sig !== featuredSigPrev) {
+        featuredSigPrev = sig;
+        $("featured-live").innerHTML = featured ? featuredLive(featured) : "";
+        bindStreamControls();
+    }
+    if (featured) patchLiveValues(featured);
     $("live-list").innerHTML = rest.map((m) => matchCard(m, now)).join("");
-    bindStreamControls();
     $("live-count").textContent = state.live.length;
     $("live-count").classList.toggle("hidden", state.live.length === 0);
     $("live-empty").classList.toggle("hidden", state.live.length > 0);

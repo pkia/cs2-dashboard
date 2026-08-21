@@ -63,6 +63,20 @@ down, no coverage for a match — the dashboard simply shows what
 Liquipedia has. The embedded player runs muted per kiosk-browser
 autoplay policy; the toggle choice is remembered.
 
+## Map veto and live round scores (HLTV)
+
+Neither Liquipedia nor bo3.gg publishes the map veto or the running
+round score; HLTV has both but sits behind bot protection. The
+`cs2-hltv` feeder service (`scripts/hltv_detail.py`) renders the live
+match page with [camoufox](https://github.com/daijro/camoufox) (the
+stealth Firefox already on this host) every ~90 s while a match is
+live, extracts the veto sequence, per-map results with half scores and
+the live round score, and writes `hltv_detail.json`. It closes the
+browser when nothing is live. Pure parsing lives in `hltv.py` so it is
+covered by tests without a browser, and the web app never imports
+camoufox — if the feeder dies the dashboard just shows the other
+sources' data.
+
 ## How it runs
 
 Same pattern as the other services on the host: Flask on port 8001
