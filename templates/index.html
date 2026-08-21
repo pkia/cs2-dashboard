@@ -1,11 +1,50 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>cs2-dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CS2 Pro Matches</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <h1>cs2-dashboard</h1>
+    <div id="tabs">
+        <button class="tab active" data-tab="live">🔴 Live <span id="live-count" class="badge hidden">0</span></button>
+        <button class="tab" data-tab="upcoming">📅 Upcoming</button>
+        <button class="tab" data-tab="results">✅ Results</button>
+    </div>
+
+    <div id="content">
+        <div id="tab-live" class="tab-content active">
+            <div id="featured-live"></div>
+            <div id="live-list" class="match-list"></div>
+            <div id="live-empty" class="empty hidden">
+                <div class="empty-title">No live matches right now</div>
+                <div class="empty-sub" id="live-next"></div>
+            </div>
+        </div>
+        <div id="tab-upcoming" class="tab-content">
+            <div id="upcoming-list" class="match-list"></div>
+            <div id="upcoming-empty" class="empty hidden">
+                <div class="empty-title">No upcoming matches listed</div>
+                <div class="empty-sub">Liquipedia lists roughly the next week of pro play</div>
+            </div>
+        </div>
+        <div id="tab-results" class="tab-content">
+            <div id="results-list" class="match-list"></div>
+            <div id="results-empty" class="empty hidden">
+                <div class="empty-title">No recent results yet</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="clock">
+        <span id="clock-left">CS2 pro scene · data from Liquipedia</span>
+        <button id="home-btn" title="Back to the kiosk chooser">⌂ Home</button>
+        <button id="auto-rotate" title="Auto-rotate screens">▶</button>
+        <span id="clock-time" class="time"></span>
+        <span id="clock-right"></span>
+    </div>
+
+    <script src="/static/dashboard.js"></script>
 </body>
 </html>

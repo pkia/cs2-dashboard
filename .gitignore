@@ -4,3 +4,5 @@ __pycache__/
 *.log
 .deployed_commit
 .deploy_failed
+cache.json
+static/logos/
