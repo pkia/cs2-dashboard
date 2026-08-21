@@ -10,15 +10,15 @@ def fixture():
         return f.read()
 
 
-def test_parse_veto_kinds_and_teams():
+def test_parse_veto_kinds_teams_and_maps():
     veto = hltv.parse_veto(fixture())
-    assert veto[0] == {"line": "1. Legacy removed Anubis", "kind": "remove", "team": "Legacy"}
+    assert veto[0] == {"line": "1. Legacy removed Anubis", "kind": "remove",
+                       "team": "Legacy", "map": "Anubis"}
     picks = [v for v in veto if v["kind"] == "pick"]
-    assert picks == [
-        {"line": "3. Legacy picked Mirage", "kind": "pick", "team": "Legacy"},
-        {"line": "4. Falcons picked Dust2", "kind": "pick", "team": "Falcons"},
-    ]
+    assert [(v["team"], v["map"]) for v in picks] == [("Legacy", "Mirage"),
+                                                      ("Falcons", "Dust2")]
     assert veto[-1]["kind"] == "left"
+    assert veto[-1]["map"] == "Ancient"
     assert len(veto) == 7
 
 

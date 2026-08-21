@@ -33,7 +33,12 @@ def parse_veto(html):
         m3 = re.match(r"\d+\.\s+(.+?)\s+was left over", line, re.I)
         if m3:
             team = m3.group(1)
-        out.append({"line": line, "kind": kind, "team": team})
+        mp = re.search(r"(?:picked|removed|banned)\s+(.+)$", line, re.I)
+        mp2 = re.search(r"^(?:\d+\.\s*)?(.+?)\s+was left over", line, re.I)
+        out.append({
+            "line": line, "kind": kind, "team": team,
+            "map": (mp.group(1) if mp else mp2.group(1) if mp2 else "").strip(),
+        })
     return out
 
 

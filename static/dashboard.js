@@ -147,13 +147,15 @@ function mapRows(m) {
 }
 
 function vetoList(m) {
+    /* one compact line: 🚫 Anubis · 🚫 Cache · ✅ Mirage · ✅ Dust2 · ⚖️ Ancient
+     * (who picked what stays on the map rows above) */
     const veto = (m.hltv && m.hltv.veto) || [];
     if (!veto.length) return "";
-    return `<div class="veto-list">` + veto.map((v) => {
+    const parts = veto.map((v) => {
         const icon = v.kind === "pick" ? "✅" : v.kind === "remove" ? "🚫" : "⚖️";
-        const line = v.line.replace(/^\d+\.\s*/, "");
-        return `<div class="veto-line ${v.kind}">${icon} ${esc(line)}</div>`;
-    }).join("") + `</div>`;
+        return `${icon} ${esc(v.map || v.line.replace(/^\d+\.\s*/, ""))}`;
+    });
+    return `<div class="veto-compact">${parts.join('<span class="dotsep">·</span>')}</div>`;
 }
 
 function mapList(m) {
@@ -219,7 +221,6 @@ function patchLiveValues(m) {
         if (round) {
             txt = `${round[0]} – ${round[1]}`;
             if (info.num) txt += ` · R${info.num}`;
-            if (info.timer) txt += ` · ${info.timer}`;
         }
         el.textContent = txt;
     }
