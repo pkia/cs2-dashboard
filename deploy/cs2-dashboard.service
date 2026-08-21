@@ -1,0 +1,14 @@
+[Unit]
+Description=cs2-dashboard Web App
+After=network.target
+
+[Service]
+Type=simple
+User=ev
+WorkingDirectory=/home/ev/cs2-dashboard
+ExecStart=/home/ev/cs2-dashboard/venv/bin/python app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

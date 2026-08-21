@@ -1,0 +1,10 @@
+[Unit]
+Description=cs2-dashboard pull-based deploy job
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ev
+WorkingDirectory=/home/ev/cs2-dashboard
+ExecStart=/home/ev/cs2-dashboard/deploy/deploy.sh
