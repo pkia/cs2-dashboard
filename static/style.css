@@ -295,6 +295,26 @@ html, body {
     cursor: pointer;
 }
 .stream-toggle:active { background: var(--accent); color: #111; }
+.stream-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 4px 0 8px;
+}
+.stream-chip-live {
+    padding: 3px 10px;
+    font-size: 13px;
+    color: var(--muted);
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+}
+.stream-chip-live.sel {
+    color: var(--text);
+    border-color: var(--accent);
+    font-weight: 700;
+}
 .stream-frame {
     width: 100%;
     aspect-ratio: 16 / 9;

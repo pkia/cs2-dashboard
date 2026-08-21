@@ -64,11 +64,15 @@ function rankChip(rank) {
 }
 
 let streamOn = localStorage.getItem("stream-on") !== "off";
+let streamPick = null;  // name of the manually chosen stream, if any
 
 function streamEmbed(m) {
     const d = m.detail;
     if (!d || !d.streams || !d.streams.length) return "";
-    const s = d.streams.find((x) => x.lang === "en") || d.streams[0];
+    const streams = d.streams;
+    let s = streams.find((x) => x.name === streamPick)
+        || streams.find((x) => x.lang === "en")
+        || streams[0];
     let src = s.embed || "";
     if (!src) return "";
     if (src.includes("twitch")) {
@@ -77,17 +81,24 @@ function streamEmbed(m) {
     } else if (src.includes("youtube")) {
         src += (src.includes("?") ? "&" : "?") + "autoplay=1&mute=1";
     }
-    const label = s.name ? `📺 ${esc(s.name)}` : "📺 stream";
-    const viewers = s.viewers ? ` · ${s.viewers.toLocaleString()} watching` : "";
+    const viewers = (n) => n ? `${n.toLocaleString()} watching` : "";
+    const chips = streams.map((x) => {
+        const sel = x.name === s.name ? " sel" : "";
+        const v = x.viewers ? ` · ${x.viewers.toLocaleString()}` : "";
+        return `<button class="stream-chip-live${sel}" data-stream="${esc(x.name)}">` +
+            `${esc(x.name)}${v}</button>`;
+    }).join("");
     const body = streamOn
-        ? `<iframe class="stream-frame" src="${esc(src)}}" allowfullscreen
+        ? `<iframe class="stream-frame" src="${esc(src)}" allowfullscreen
+             sandbox="allow-scripts allow-same-origin allow-presentation"
              referrerpolicy="no-referrer" loading="lazy"></iframe>`
         : "";
     return `<div class="stream-box">
         <div class="stream-bar">
-            <span>${label}${esc(viewers)}</span>
+            <span>📺 ${esc(s.name || "stream")} ${esc(viewers(s.viewers) ? "· " + viewers(s.viewers) : "")}</span>
             <button class="stream-toggle">${streamOn ? "⏹ stop" : "▶ watch"}</button>
-        </div>${body}</div>`;
+        </div>
+        <div class="stream-chips">${chips}</div>${body}</div>`;
 }
 
 function featuredLive(m) {
@@ -233,7 +244,7 @@ function render() {
     const rest = state.live.filter((m) => m !== featured);
     $("featured-live").innerHTML = featured ? featuredLive(featured) : "";
     $("live-list").innerHTML = rest.map((m) => matchCard(m, now)).join("");
-    bindStreamToggle();
+    bindStreamControls();
     $("live-count").textContent = state.live.length;
     $("live-count").classList.toggle("hidden", state.live.length === 0);
     $("live-empty").classList.toggle("hidden", state.live.length > 0);
@@ -302,14 +313,23 @@ async function load() {
     }
 }
 
-function bindStreamToggle() {
-    const btn = document.querySelector(".stream-toggle");
-    if (!btn || btn.dataset.bound) return;
-    btn.dataset.bound = "1";
-    btn.addEventListener("click", () => {
-        streamOn = !streamOn;
-        localStorage.setItem("stream-on", streamOn ? "on" : "off");
-        render();
+function bindStreamControls() {
+    const toggle = document.querySelector(".stream-toggle");
+    if (toggle && !toggle.dataset.bound) {
+        toggle.dataset.bound = "1";
+        toggle.addEventListener("click", () => {
+            streamOn = !streamOn;
+            localStorage.setItem("stream-on", streamOn ? "on" : "off");
+            render();
+        });
+    }
+    document.querySelectorAll(".stream-chip-live").forEach((chip) => {
+        if (chip.dataset.bound) return;
+        chip.dataset.bound = "1";
+        chip.addEventListener("click", () => {
+            streamPick = chip.dataset.stream;
+            render();
+        });
     });
 }
 
