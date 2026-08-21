@@ -225,8 +225,9 @@ document.querySelectorAll(".tab").forEach((b) =>
     if (wanted && document.getElementById("tab-" + wanted)) showTab(wanted);
 }
 
-$("maritime-btn").addEventListener("click", () => {
-    location.href = location.protocol + "//" + location.hostname + ":8000/";
+$("home-btn").addEventListener("click", () => {
+    // Back to the kiosk chooser (kiosk-home on :8091)
+    location.href = location.protocol + "//" + location.hostname + ":8091/";
 });
 $("auto-rotate").addEventListener("click", () => {
     lastInteraction = Date.now();

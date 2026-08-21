@@ -3,8 +3,8 @@
 ![CI](https://github.com/pkia/cs2-dashboard/actions/workflows/ci.yml/badge.svg)
 
 A pro Counter-Strike 2 match dashboard for the Raspberry Pi touchscreen
-kiosk — the esports counterpart to the maritime dashboard next door on
-`http://<host>:8000`.
+kiosk. One of the dashboards reachable from the kiosk chooser
+(kiosk-home on `http://<host>:8091`).
 
 ## What it shows
 
@@ -45,8 +45,8 @@ Same pattern as the other services on the host: Flask on port 8001
 (`cs2-dashboard.service`), pull-based CD via the deploy timer, CI on
 every push (ruff fatal rules, byte-compile, pytest). The UI targets the
 1024×600 kiosk touchscreen: big touch targets, auto-refresh every
-minute, optional tab auto-rotate, and a ⛵ Marine button that flips the
-kiosk to the maritime dashboard (which has a matching button back).
+minute, optional tab auto-rotate, and a ⌂ Home button that returns to
+the kiosk chooser.
 
 ## Local development
 

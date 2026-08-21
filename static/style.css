@@ -220,7 +220,7 @@ html, body {
 #clock .time { font-weight: 700; color: var(--text); font-size: 17px; }
 #clock-right { margin-left: auto; text-align: right; }
 #clock-left { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 42%; }
-#maritime-btn, #auto-rotate {
+#home-btn, #auto-rotate {
     padding: 6px 14px;
     font-size: 15px;
     font-weight: 600;
@@ -230,6 +230,6 @@ html, body {
     border-radius: 9px;
     cursor: pointer;
 }
-#maritime-btn:active, #auto-rotate:active { background: var(--accent); color: #111; }
+#home-btn:active, #auto-rotate:active { background: var(--accent); color: #111; }
 #auto-rotate.on { background: var(--accent); color: #111; }
 .stale { color: var(--live); }
