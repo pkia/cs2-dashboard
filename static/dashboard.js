@@ -158,20 +158,31 @@ function vetoList(m) {
     return `<div class="veto-compact">${parts.join('<span class="dotsep">·</span>')}</div>`;
 }
 
-function mapList(m) {
+/* map pills: horizontal strip under the stream */
+function mapStripH(m) {
     const rows = mapRows(m);
     if (!rows.length) return "";
-    return `<div class="map-list">` + rows.map((r) => {
+    return `<div class="map-strip">` + rows.map((r) => {
         const live = r.cls === "live" ? `<span class="live-dot"></span>` : "";
-        const pick = r.pick ? ` · ${esc(r.pick)} pick` : "";
+        const pick = r.pick ? ` <span class="pick-tag">· ${esc(r.pick)}</span>` : "";
         const halves = r.halves ? ` <span class="halves">(${esc(r.halves)})</span>` : "";
-        return `<div class="map-row ${r.cls}">${live}<span class="map-name">${esc(r.name)}</span>` +
-            `<span class="map-score">${esc(r.middle)}</span>` +
-            `<span class="map-note">${pick}${halves}</span></div>`;
+        return `<span class="map-pill ${r.cls}">${live}<b>${esc(r.name)}</b>` +
+               `<span class="map-pill-score">${esc(r.middle || "—")}</span>${pick}${halves}</span>`;
     }).join("") + `</div>`;
 }
 
-function featuredLive(m) {
+function nextUp(next) {
+    if (!next || !next.length) return "";
+    return `<div class="next-up"><div class="day-header">Up next</div>` +
+        next.map((m) =>
+            `<div class="next-row">` +
+            `<span class="next-teams">${esc(m.team1.name)} v ${esc(m.team2.name)}</span>` +
+            `<span class="next-meta"><span class="countdown" data-ts="${m.start_ts}">…</span>` +
+            ` · ${esc(m.bestof || "")} · ${timeHM(m.start_ts)}</span></div>`).join("") +
+        `</div>`;
+}
+
+function featuredLive(m, next) {
     const t1 = m.team1 || {}, t2 = m.team2 || {};
     const d = m.detail || {};
     const b1 = (d.teams && d.teams[0]) || {}, b2 = (d.teams && d.teams[1]) || {};
@@ -185,6 +196,8 @@ function featuredLive(m) {
         <div class="feat-grid">
             <div class="feat-left">
                 ${streamEmbed(m)}
+                ${mapStripH(m)}
+                ${vetoList(m)}
             </div>
             <div class="feat-right">
                 <div class="match-top">
@@ -208,8 +221,7 @@ function featuredLive(m) {
                         <div class="team-full">${rankChip(b2.rank)}</div>
                     </div>
                 </div>
-                ${mapList(m)}
-                ${vetoList(m)}
+                ${nextUp(next)}
             </div>
         </div>
     </div>`;
@@ -236,14 +248,14 @@ function patchLiveValues(m) {
         meta.textContent = `📺 ${s.name}` +
             (s.viewers ? ` · ${s.viewers.toLocaleString()} watching` : "");
     }
-    // running score into the live map row, patched in place
-    const liveRow = document.querySelector(".map-row.live .map-score");
-    if (liveRow) {
-        liveRow.textContent = round ? `${round[0]}–${round[1]}` : "on now";
+    // running score into the live map pill, patched in place
+    const livePill = document.querySelector(".map-pill.live .map-pill-score");
+    if (livePill) {
+        livePill.textContent = round ? `${round[0]}–${round[1]}` : "on now";
     }
 }
 
-function featuredSig(m) {
+function featuredSig(m, next) {
     if (!m) return "none";
     const d = m.detail || {};
     const streams = (d.streams || []).map((x) => x.name).sort();
@@ -255,6 +267,7 @@ function featuredSig(m) {
         (m.hltv && m.hltv.maps || []).map((h) => [h.map, h.left.score, h.right.score]).join(),
         streamOn, streamPick,
         streams.join(),
+        (next || []).map((n) => [n.team1 && n.team1.name, n.start_ts]).join(),
     ]);
 }
 
@@ -360,15 +373,16 @@ function render() {
 
     // live: featured match (prefer one with detail) + the rest as cards.
     // Rebuild the featured card only when its structure changes - a
-    // rebuild restarts the stream iframe, so round scores and viewer
-    // counts are patched in place instead.
+    // rebuild restarts the stream iframe, so round scores, countdowns and
+    // viewer counts are patched in place instead.
     const withDetail = state.live.filter((m) => m.detail);
     const featured = withDetail.length ? withDetail[0] : state.live[0];
     const rest = state.live.filter((m) => m !== featured);
-    const sig = featuredSig(featured);
+    const next = state.upcoming.slice(0, 2);
+    const sig = featuredSig(featured, next);
     if (sig !== featuredSigPrev) {
         featuredSigPrev = sig;
-        $("featured-live").innerHTML = featured ? featuredLive(featured) : "";
+        $("featured-live").innerHTML = featured ? featuredLive(featured, next) : "";
         bindStreamControls();
     }
     if (featured) patchLiveValues(featured);
