@@ -10,6 +10,7 @@ import os
 import threading
 import time
 
+import bo3live
 import liquipedia
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
@@ -18,7 +19,9 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_DIR = os.path.join(BASE_DIR, "static", "logos")
-ALLOWED_PREFIX = "/commons/images/"
+ALLOWED_PREFIX = "/commons/images/"          # liquipedia, as ?path=
+ALLOWED_IMG_HOSTS = ("https://files.bo3.gg/",
+                    "https://image-proxy.bo3.gg/")  # bo3.gg, as ?url=
 ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
 
 _logo_locks = {}
@@ -33,14 +36,21 @@ def index():
 @app.route("/api/matches")
 def api_matches():
     state = liquipedia.matches()
+    live = bo3live.attach(state["live"], bo3live.state())
     return jsonify({
         "ok": state["fetched_at"] > 0,
         "fetched_at": state["fetched_at"],
-        "live": state["live"],
+        "live": live,
         "upcoming": state["upcoming"],
         "recent": state["recent"],
         "time": time.time(),
     })
+
+
+@app.route("/api/live")
+def api_live():
+    state = bo3live.state()
+    return jsonify(state)
 
 
 @app.route("/api/status")
@@ -56,17 +66,29 @@ def api_status():
 
 @app.route("/api/logo")
 def api_logo():
-    """Proxy and cache one Liquipedia image.
+    """Proxy and cache one remote image (Liquipedia or bo3.gg hosts).
 
-    The dashboard always asks for /api/logo?path=<image path>; the first
-    request fetches it from Liquipedia and later ones are served from
-    disk. Only paths under /commons/images/ with an image extension are
-    ever fetched, so the endpoint cannot be used as an open proxy.
+    The dashboard asks for /api/logo?path=<liquipedia path> or
+    ?url=<full bo3.gg image URL>; the first request fetches it and later
+    ones are served from disk. Only the two allow-listed sources with an
+    image extension are ever fetched, so this cannot be used as an open
+    proxy.
     """
     path = request.args.get("path", "")
+    url = request.args.get("url", "")
+    if not path and url:
+        if not url.startswith(ALLOWED_IMG_HOSTS) or ".." in url:
+            return jsonify({"error": "url not allowed"}), 400
+        path = url
     ext = os.path.splitext(path)[1].lower()
-    if not path.startswith(ALLOWED_PREFIX) or ext not in ALLOWED_EXT or ".." in path:
+    if not path.startswith(ALLOWED_PREFIX) and not path.startswith(ALLOWED_IMG_HOSTS):
         return jsonify({"error": "path not allowed"}), 400
+    if ext not in ALLOWED_EXT or ".." in path:
+        return jsonify({"error": "path not allowed"}), 400
+    if path.startswith(ALLOWED_PREFIX):
+        fetch_url = liquipedia.ROOT + path
+    else:
+        fetch_url = path
 
     name = hashlib.sha256(path.encode()).hexdigest()[:24] + ext
     cache_file = os.path.join(LOGO_DIR, name)
@@ -77,7 +99,7 @@ def api_logo():
         with lock:
             if not os.path.exists(cache_file):
                 try:
-                    data = liquipedia.fetch(liquipedia.ROOT + path, timeout=10)
+                    data = bo3live.fetch_bytes(fetch_url)
                     tmp = cache_file + ".tmp"
                     with open(tmp, "wb") as f:
                         f.write(data)
@@ -90,4 +112,5 @@ def api_logo():
 if __name__ == "__main__":
     os.makedirs(LOGO_DIR, exist_ok=True)
     threading.Thread(target=liquipedia.matches, daemon=True).start()
+    bo3live.start_background()
     app.run(host="0.0.0.0", port=8001, threaded=True)

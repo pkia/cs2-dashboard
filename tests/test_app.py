@@ -2,6 +2,7 @@ import json
 import os
 
 import app
+import bo3live
 import liquipedia
 
 client = app.app.test_client()
@@ -51,22 +52,21 @@ def test_logo_proxy_rejects_non_liquipedia_paths():
 
 def test_logo_proxy_fetches_and_caches(monkeypatch, tmp_path):
     app.LOGO_DIR = str(tmp_path)
-    monkeypatch.setattr(liquipedia, "fetch",
-                        lambda url, timeout=10: b"\x89PNG-fake")
+    monkeypatch.setattr(bo3live, "fetch_bytes", lambda url: b"\x89PNG-fake")
     r = client.get("/api/logo?path=/commons/images/a/b/logo.png")
     assert r.status_code == 200
     assert r.data == b"\x89PNG-fake"
     # second hit is served from the disk cache with no fetch attempted
-    monkeypatch.setattr(liquipedia, "fetch",
-                        lambda url, timeout=10: (_ for _ in ()).throw(AssertionError()))
+    monkeypatch.setattr(bo3live, "fetch_bytes",
+                        lambda url: (_ for _ in ()).throw(AssertionError()))
     r = client.get("/api/logo?path=/commons/images/a/b/logo.png")
     assert r.status_code == 200
 
 
 def test_logo_cache_survives_fetch_failure(monkeypatch, tmp_path):
     app.LOGO_DIR = str(tmp_path)
-    monkeypatch.setattr(liquipedia, "fetch",
-                        lambda url, timeout=10: (_ for _ in ()).throw(OSError()))
+    monkeypatch.setattr(bo3live, "fetch_bytes",
+                        lambda url: (_ for _ in ()).throw(OSError()))
     assert client.get("/api/logo?path=/commons/images/c/d/other.jpg").status_code == 502
 
 
@@ -81,3 +81,28 @@ def test_disk_cache_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setattr(liquipedia, "_cache", {"fetched_at": 0.0, "live": [], "upcoming": [], "recent": []})
     got = liquipedia.matches(stale_ok=False)
     assert got["fetched_at"] == 9999999999.0
+
+
+def test_api_matches_attaches_bo3_detail(monkeypatch):
+    state = liquipedia.parse_matches(open(FIXTURE).read())
+    state["fetched_at"] = 123.0
+    live = state["live"]
+    monkeypatch.setattr(liquipedia, "matches", lambda: state)
+    monkeypatch.setattr(bo3live, "state", lambda: {"updated": 1.0, "matches": [
+        {"teams": [{"name": "Legacy"}, {"name": "Falcons"}], "series": [1, 0]}]})
+    j = client.get("/api/matches").get_json()
+    assert j["live"][0]["detail"]["series"] == [1, 0]
+
+
+def test_api_live_endpoint(monkeypatch):
+    monkeypatch.setattr(bo3live, "state",
+                        lambda: {"updated": 5.0, "matches": [{"slug": "x"}]})
+    j = client.get("/api/live").get_json()
+    assert j["matches"][0]["slug"] == "x"
+
+
+def test_logo_proxy_allows_bo3_hosts_only():
+    ok = client.get("/api/logo?url=https://files.bo3.gg/uploads/team/8118/image/x.webp")
+    assert ok.status_code in (200, 502)  # 502 only if offline
+    bad = client.get("/api/logo?url=https://evil.com/uploads/x.webp")
+    assert bad.status_code == 400

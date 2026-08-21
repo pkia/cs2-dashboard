@@ -22,8 +22,109 @@ function esc(s) {
 
 function logoImg(path) {
     if (!path) return "";
-    return `<img src="/api/logo?path=${encodeURIComponent(path)}" alt="" ` +
+    const q = path.startsWith("http")
+        ? "url=" + encodeURIComponent(path)     // bo3.gg full URL
+        : "path=" + encodeURIComponent(path);   // liquipedia path
+    return `<img src="/api/logo?${q}" alt="" ` +
            `onerror="this.parentNode.style.visibility='hidden'">`;
+}
+
+/* bo3.gg live detail helpers ------------------------------------------ */
+
+function roundScore(detail) {
+    /* Snapshot schema is undocumented; look for the common shapes a
+     * round-score payload would take and render it if we find one. */
+    const snap = detail && detail.snapshot;
+    if (!snap) return null;
+    const s = snap.results || snap.data || snap;
+    const pairs = [
+        [s.score_team1, s.score_team2], [s.team1_score, s.team2_score],
+        [s.t1_score, s.t2_score], [s.rounds_team1, s.rounds_team2],
+    ];
+    for (const [a, b] of pairs) {
+        if (Number.isInteger(a) && Number.isInteger(b)) return [a, b];
+    }
+    return null;
+}
+
+function mapStrip(detail) {
+    const games = (detail && detail.games) || [];
+    if (!games.length) return "";
+    return `<div class="map-strip">` + games.map((g) => {
+        const cls = g.status === "current" ? " current"
+            : g.status === "finished" ? " done" : "";
+        const label = g.map ? `${g.number} · ${g.map}` : `Map ${g.number}`;
+        const live = g.status === "current" ? `<span class="live-dot"></span>` : "";
+        return `<span class="map-pill${cls}">${live}${esc(label)}</span>`;
+    }).join("") + `</div>`;
+}
+
+function rankChip(rank) {
+    return rank ? `<span class="rank-chip">#${rank}</span>` : "";
+}
+
+let streamOn = localStorage.getItem("stream-on") !== "off";
+
+function streamEmbed(m) {
+    const d = m.detail;
+    if (!d || !d.streams || !d.streams.length) return "";
+    const s = d.streams.find((x) => x.lang === "en") || d.streams[0];
+    let src = s.embed || "";
+    if (!src) return "";
+    if (src.includes("twitch")) {
+        src += (src.includes("?") ? "&" : "?") +
+            `muted=true&autoplay=true&parent=${location.hostname}`;
+    } else if (src.includes("youtube")) {
+        src += (src.includes("?") ? "&" : "?") + "autoplay=1&mute=1";
+    }
+    const label = s.name ? `📺 ${esc(s.name)}` : "📺 stream";
+    const viewers = s.viewers ? ` · ${s.viewers.toLocaleString()} watching` : "";
+    const body = streamOn
+        ? `<iframe class="stream-frame" src="${esc(src)}}" allowfullscreen
+             referrerpolicy="no-referrer" loading="lazy"></iframe>`
+        : "";
+    return `<div class="stream-box">
+        <div class="stream-bar">
+            <span>${label}${esc(viewers)}</span>
+            <button class="stream-toggle">${streamOn ? "⏹ stop" : "▶ watch"}</button>
+        </div>${body}</div>`;
+}
+
+function featuredLive(m) {
+    const t1 = m.team1 || {}, t2 = m.team2 || {};
+    const d = m.detail || {};
+    const b1 = (d.teams && d.teams[0]) || {}, b2 = (d.teams && d.teams[1]) || {};
+    const series = (d.series && Number.isInteger(d.series[0])) ? d.series
+        : [m.score1, m.score2];
+    const rs = roundScore(d);
+    const score = Number.isInteger(series[0])
+        ? `<div class="score">${series[0]}<span class="sep">:</span>${series[1]}</div>`
+        : `<div class="score vs">vs</div>`;
+    const roundLine = rs
+        ? `<div class="round-score">round ${rs[0]} – ${rs[1]}</div>` : "";
+    const bo = m.bestof || (d.bestof ? "Bo" + d.bestof : "");
+    return `<div class="featured">
+        <div class="match-top">
+            <span class="live-pill big"><span class="live-dot"></span>LIVE</span>
+            <span class="tournament-name">${esc((m.tournament || {}).name || "")}</span>
+            <span class="top-right">${esc(bo)}</span>
+        </div>
+        <div class="feat-row">
+            <div class="feat-team">
+                <span class="team-logo big">${logoImg(t1.logo || b1.logo)}</span>
+                <div class="team-short">${esc(t1.name || b1.name || "TBD")}</div>
+                <div class="team-full">${esc(b1.full || "")} ${rankChip(b1.rank)}</div>
+            </div>
+            <div class="score-cell big">${score}${roundLine}</div>
+            <div class="feat-team right">
+                <span class="team-logo big">${logoImg(t2.logo || b2.logo)}</span>
+                <div class="team-short">${esc(t2.name || b2.name || "TBD")}</div>
+                <div class="team-full">${rankChip(b2.rank)} ${esc(b2.full || "")}</div>
+            </div>
+        </div>
+        ${mapStrip(d)}
+        ${streamEmbed(m)}
+    </div>`;
 }
 
 function countdown(ts, now) {
@@ -80,6 +181,15 @@ function matchCard(m, now, opts = {}) {
     }
 
     if (m.live) {
+        const d = m.detail || {};
+        const series = (d.series && Number.isInteger(d.series[0])) ? d.series
+            : [m.score1, m.score2];
+        if (Number.isInteger(series[0])) {
+            score = `<div class="score">` +
+                `<span class="s">${series[0]}</span>` +
+                `<span class="sep">:</span>` +
+                `<span class="s">${series[1]}</span></div>`;
+        }
         note = `<span class="live-pill"><span class="live-dot"></span>LIVE</span>` +
                `<div class="score-note">${esc(m.bestof || "")}</div>`;
     } else if (m.finished) {
@@ -105,20 +215,25 @@ function matchCard(m, now, opts = {}) {
         `<div class="match-side${lost1 ? " lost" : ""}">` +
             `<span class="team-logo">${logoImg(t1.logo)}</span>` +
             `<div class="team-cell"><div class="team-short">${esc(t1.name || "TBD")}</div>` +
-            `<div class="team-full">${esc(t1.full || "")}</div></div></div>` +
+            `<div class="team-full">${esc(t1.full || "")} ${rankChip((m.detail || {}).teams && m.detail.teams[0] && m.detail.teams[0].rank)}</div></div></div>` +
         `<div class="score-cell">${score}${note}</div>` +
         `<div class="match-side right${lost2 ? " lost" : ""}">` +
             `<span class="team-logo">${logoImg(t2.logo)}</span>` +
             `<div class="team-cell"><div class="team-short">${esc(t2.name || "TBD")}</div>` +
-            `<div class="team-full">${esc(t2.full || "")}</div></div></div>` +
-        `</div></div>`;
+            `<div class="team-full">${rankChip((m.detail || {}).teams && m.detail.teams[1] && m.detail.teams[1].rank)} ${esc(t2.full || "")}</div></div></div>` +
+        `</div>${m.live ? mapStrip(m.detail) : ""}</div>`;
 }
 
 function render() {
     const now = Date.now();
 
-    // live
-    $("live-list").innerHTML = state.live.map((m) => matchCard(m, now)).join("");
+    // live: featured match (prefer one with bo3 detail) + the rest as cards
+    const withDetail = state.live.filter((m) => m.detail);
+    const featured = withDetail.length ? withDetail[0] : state.live[0];
+    const rest = state.live.filter((m) => m !== featured);
+    $("featured-live").innerHTML = featured ? featuredLive(featured) : "";
+    $("live-list").innerHTML = rest.map((m) => matchCard(m, now)).join("");
+    bindStreamToggle();
     $("live-count").textContent = state.live.length;
     $("live-count").classList.toggle("hidden", state.live.length === 0);
     $("live-empty").classList.toggle("hidden", state.live.length > 0);
@@ -187,6 +302,17 @@ async function load() {
     }
 }
 
+function bindStreamToggle() {
+    const btn = document.querySelector(".stream-toggle");
+    if (!btn || btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", () => {
+        streamOn = !streamOn;
+        localStorage.setItem("stream-on", streamOn ? "on" : "off");
+        render();
+    });
+}
+
 /* ---- tabs & rotation ---- */
 function showTab(name) {
     document.querySelectorAll(".tab").forEach((b) =>
@@ -244,6 +370,10 @@ document.addEventListener("touchstart", () => { lastInteraction = Date.now(); },
 
 load();
 clock();
-setInterval(load, REFRESH_MS);
+// adaptive poll: 30s while matches are live, 60s otherwise
+(function pollLoop() {
+    load();
+    setTimeout(pollLoop, state.live.length ? 30000 : REFRESH_MS);
+})();
 setInterval(tickCountdowns, TICK_MS);
 setInterval(clock, 1000);
